@@ -57,6 +57,7 @@ The reason for this design is separation of responsibility. S3 stores the lake, 
 ## Architecture 
 
 (_please open image seperately for a clear image_)
+
 The main architecture diagram shows the full data path from GHArchive ingestion to the dashboard API and frontend.
 
 ![GitHub Analytics Architecture](images/github_analytics_Architecture.png)
