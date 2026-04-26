@@ -54,8 +54,9 @@ GHArchive hourly files
 
 The reason for this design is separation of responsibility. S3 stores the lake, Glue handles distributed transforms, Athena gives a serverless SQL layer, DuckDB makes dashboard serving fast, FastAPI owns the product API, and the frontend only renders the experience.
 
-## Architecture
+## Architecture 
 
+(_please open image seperately for a clear image_)
 The main architecture diagram shows the full data path from GHArchive ingestion to the dashboard API and frontend.
 
 ![GitHub Analytics Architecture](images/github_analytics_Architecture.png)
