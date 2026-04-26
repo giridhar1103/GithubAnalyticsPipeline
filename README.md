@@ -122,8 +122,7 @@ cd infra/envs/prod
 terraform init
 terraform plan \
   -var="aws_region=us-east-1" \
-  -var="project_name=github-analytics" \
-  -var="domain_name=api.<your_domain_here>"
+  -var="project_name=github-analytics"
 terraform apply
 ```
 
