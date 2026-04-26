@@ -54,19 +54,9 @@ GHArchive hourly files
 
 The reason for this design is separation of responsibility. S3 stores the lake, Glue handles distributed transforms, Athena gives a serverless SQL layer, DuckDB makes dashboard serving fast, FastAPI owns the product API, and the frontend only renders the experience.
 
-## Repository Structure
+## Architecture
 
-```text
-api/                  FastAPI application and Docker image
-glue_jobs/            PySpark ETL jobs for silver and gold layers
-ingestion/            Prefect flow for GHArchive ingestion
-infra/                Terraform for AWS infrastructure
-scripts/              Operational scripts for dashboard cache refresh
-sql/                  Athena DDL, views, and data quality checks
-docs/                 Architecture and deployment documentation
-.github/workflows/    CI, Docker build, and Terraform workflows
-tests/                Unit tests for API and transformation helpers
-```
+
 
 ## Data Lake Design
 
