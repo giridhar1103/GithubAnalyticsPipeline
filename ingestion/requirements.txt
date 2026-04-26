@@ -1,0 +1,5 @@
+prefect==3.1.11
+boto3==1.35.92
+requests==2.32.3
+pyarrow==18.1.0
+python-dateutil==2.9.0.post0
