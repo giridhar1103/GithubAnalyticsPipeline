@@ -60,12 +60,11 @@ The main architecture diagram shows the full data path from GHArchive ingestion 
 
 ![GitHub Analytics Architecture](images/github_analytics_Architecture.png)
 
-The DevOps view shows how CI/CD, container builds, Terraform, monitoring, and runtime services fit around the data platform.
+How CI/CD, container builds, Terraform, monitoring, and runtime services fit around the data platform:
 
 ![DevOps and Deployment Architecture](images/devops.png)
 
-The legend below explains the major service groups and connection styles used in the architecture diagrams.
-
+Legend:
 ![Architecture Legend](images/legend.png)
 
 ## Data Lake Design
