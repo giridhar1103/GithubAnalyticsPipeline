@@ -65,6 +65,7 @@ How CI/CD, container builds, Terraform, monitoring, and runtime services fit aro
 ![DevOps and Deployment Architecture](images/devops.png)
 
 Legend:
+
 ![Architecture Legend](images/legend.png)
 
 ## Data Lake Design
