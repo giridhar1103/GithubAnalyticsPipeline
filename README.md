@@ -1,15 +1,50 @@
 # GitHub Analytics Pipeline
 
-Cloud-native GitHub event analytics platform built on AWS. The system ingests GHArchive hourly event data, stores it in a Medallion data lake, builds analytical aggregates with Glue and PySpark, exposes low-latency dashboard APIs with FastAPI and DuckDB, and serves a React dashboard through a public API endpoint.
+This project is a cloud-native analytics pipeline for GHArchive data. The idea is simple: GitHub publishes public event data every hour, and this system turns those raw hourly files into clean analytics tables, fast API responses, and dashboard-ready metrics.
 
-## Architecture
+I built it like a real data engineering project instead of just writing one script that downloads data. The pipeline has a bronze, silver, and gold data model, runs batch processing with Prefect and Glue, stores data in S3, exposes analytics through FastAPI, and includes Terraform and CI workflows so the whole thing can be deployed in a repeatable way.
+
+## What The Project Does
+
+At a high level, the project answers questions like:
+
+- How many GitHub events happened in a selected time window?
+- Which event types are most common?
+- Which users are pushing the most code?
+- Which organizations and repositories are getting the most pull request activity?
+- How does activity change by hour or by day?
+
+The frontend should not know anything about S3, Athena, Glue, or DuckDB. It just calls clean REST endpoints like:
 
 ```text
-GHArchive
-  -> Prefect ingestion
+/api/gh/summary?preset=7d
+/api/gh/event-types?preset=7d
+/api/gh/top-push-users?preset=7d
+```
+
+Everything behind those endpoints is handled by the data pipeline.
+
+## System Walkthrough
+
+The source data comes from GHArchive:
+
+```text
+https://data.gharchive.org/YYYY-MM-DD-H.json.gz
+```
+
+Each file contains one hour of public GitHub events. The pipeline checks which hourly files are ready, downloads the missing ones, converts them into Parquet, and uploads them into S3.
+
+The full path looks like this:
+
+```text
+GHArchive hourly files
+  -> Prefect ingestion flow
   -> S3 bronze Parquet
   -> Glue Data Catalog
-  -> Glue PySpark silver and gold jobs
+  -> Glue PySpark silver transformation
+  -> S3 silver event model
+  -> Glue PySpark gold aggregation
+  -> S3 gold dashboard tables
   -> Athena analytical warehouse
   -> DuckDB dashboard cache
   -> FastAPI Docker service
@@ -17,7 +52,9 @@ GHArchive
   -> React dashboard
 ```
 
-## What This Repository Contains
+The reason for this design is separation of responsibility. S3 stores the lake, Glue handles distributed transforms, Athena gives a serverless SQL layer, DuckDB makes dashboard serving fast, FastAPI owns the product API, and the frontend only renders the experience.
+
+## Repository Structure
 
 ```text
 api/                  FastAPI application and Docker image
@@ -25,46 +62,39 @@ glue_jobs/            PySpark ETL jobs for silver and gold layers
 ingestion/            Prefect flow for GHArchive ingestion
 infra/                Terraform for AWS infrastructure
 scripts/              Operational scripts for dashboard cache refresh
-sql/                  Athena DDL and analytical views
+sql/                  Athena DDL, views, and data quality checks
 docs/                 Architecture and deployment documentation
 .github/workflows/    CI, Docker build, and Terraform workflows
 tests/                Unit tests for API and transformation helpers
 ```
 
-## AWS Services Used
+## Data Lake Design
 
-- S3 for bronze, silver, and gold Parquet datasets
-- AWS Glue Data Catalog for table metadata
-- AWS Glue PySpark jobs for distributed transforms
-- Athena for serverless warehouse queries
-- EC2 for the API runtime
-- ECR for Docker images
-- Application Load Balancer for public API traffic
-- CloudWatch for logs, metrics, and alarms
-- IAM for least-privilege access
-- Route 53 and ACM for DNS and TLS
-
-## Data Layers
+The data lake follows a Medallion model.
 
 ### Bronze
 
-Raw GHArchive events normalized into partitioned Parquet:
+Bronze is the first structured copy of the data. It is still close to the original GHArchive event stream, but stored as partitioned Parquet instead of compressed JSON.
 
 ```text
 s3://<bucket>/bronze/gharchive/date=YYYY-MM-DD/hour=H/part-000.parquet
 ```
 
+This layer is useful because it gives us a reliable replay point. If the silver or gold logic changes later, the downstream tables can be rebuilt from bronze.
+
 ### Silver
 
-Typed, deduplicated, queryable event model:
+Silver is the cleaned event model. This is where timestamps are parsed, event IDs are deduplicated, bot flags are added, and columns are typed properly.
 
 ```text
 s3://<bucket>/silver/events/event_day=YYYY-MM-DD/hour=H/
 ```
 
+This is the table I would use for exploratory analysis or for creating new metrics.
+
 ### Gold
 
-Dashboard-ready aggregate tables:
+Gold is the dashboard layer. It stores pre-aggregated tables so that the API does not need to scan raw event-level data on every request.
 
 ```text
 s3://<bucket>/gold/event_type_daily/
@@ -74,7 +104,13 @@ s3://<bucket>/gold/pr_org_daily/
 s3://<bucket>/gold/pr_repo_daily/
 ```
 
-## API Endpoints
+These tables are intentionally small and shaped around the dashboard.
+
+## API Layer
+
+The FastAPI service reads from a local DuckDB dashboard cache. DuckDB is built from the gold Parquet tables and gives the API predictable low-latency reads.
+
+Current endpoints:
 
 ```text
 GET /health
@@ -86,11 +122,24 @@ GET /api/gh/top-pr-orgs?preset=7d&limit=10
 GET /api/gh/top-pr-repos?preset=7d&limit=10
 ```
 
-Supported presets:
+Supported dashboard presets:
 
 ```text
 1h, 4h, 24h, 7d, 30d, max
 ```
+
+Short presets use hourly aggregates. Longer presets use daily aggregates.
+
+## Why DuckDB If Athena Already Exists?
+
+Athena is great for warehouse queries, validation, and backfills. It is not always the best choice for a dashboard request that should return quickly every time.
+
+So the project uses both:
+
+- Athena for serverless SQL on S3
+- DuckDB as a compact serving cache for FastAPI
+
+That keeps the architecture practical. The data lake remains the source of truth, while the API gets a fast local database optimized for dashboard reads.
 
 ## Local API Development
 
@@ -126,9 +175,18 @@ terraform plan \
 terraform apply
 ```
 
-## Pipeline Execution
+The Terraform code provisions the main AWS pieces used by the platform:
 
-Run ingestion locally:
+- S3 data lake bucket
+- IAM roles and instance profile
+- Glue database and jobs
+- EC2 API host
+- Application Load Balancer
+- CloudWatch log groups and alarm skeletons
+
+## Running The Pipeline
+
+Deploy the ingestion flow:
 
 ```bash
 cd ingestion
@@ -139,7 +197,7 @@ prefect deploy --all
 prefect worker start --pool github-analytics
 ```
 
-Run Glue jobs:
+Run the Glue jobs for a processing date:
 
 ```bash
 aws glue start-job-run \
@@ -151,13 +209,50 @@ aws glue start-job-run \
   --arguments '{"--S3_BUCKET":"<your_bucket_here>","--PROCESS_DATE":"2026-04-26"}'
 ```
 
-Refresh the DuckDB dashboard cache:
+Refresh the DuckDB cache:
 
 ```bash
 python scripts/build_dashboard_cache.py \
   --bucket <your_bucket_here> \
   --database-path /opt/github-analytics/data/dashboard.duckdb
 ```
+
+## Cost Notes
+
+This project can be tested cheaply if you are careful, but some AWS services can cost money if left running.
+
+### Usually Free Or Very Cheap
+
+- GHArchive data is public and free to download.
+- Local Python development is free.
+- DuckDB is free and runs locally.
+- FastAPI local development is free.
+- Terraform itself is free.
+- GitHub repository hosting is free for public repos.
+- Small Athena queries can be cheap if the data scanned is small.
+- S3 storage is cheap at small scale, especially for Parquet.
+
+### Services That Can Cost You
+
+- EC2 charges while the instance is running.
+- Application Load Balancer charges hourly and by usage.
+- Glue jobs charge based on worker time.
+- Athena charges by data scanned.
+- S3 charges for storage, requests, and data transfer.
+- CloudWatch can charge for logs, metrics, and retention.
+- NAT Gateway can become expensive if used in a private subnet setup.
+- Route 53 hosted zones and DNS queries can have small recurring costs.
+
+### How I Would Keep Costs Low
+
+- Use a small EC2 instance for the API.
+- Stop EC2 when not demoing.
+- Keep Glue worker counts low for small batches.
+- Store data as Parquet to reduce Athena scan size.
+- Add S3 lifecycle rules for raw files.
+- Keep CloudWatch log retention short.
+- Avoid NAT Gateway unless the VPC design really needs it.
+- Process a limited date range while testing.
 
 ## Documentation
 
@@ -166,3 +261,7 @@ python scripts/build_dashboard_cache.py \
 - [Data Quality](docs/data_quality.md)
 - [Metrics Catalog](docs/metrics_catalog.md)
 - [Operations Runbook](docs/operations.md)
+
+## Project Summary
+
+The main goal of this project is to show how raw event data becomes a real analytics product. The pipeline starts with hourly public GitHub events, turns them into a structured lakehouse, builds metrics with distributed jobs, and serves the final numbers through a clean API that a dashboard can use directly.
