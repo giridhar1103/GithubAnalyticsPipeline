@@ -1,0 +1,13 @@
+name: github-analytics-ingestion
+prefect-version: 3.1.11
+
+deployments:
+  - name: bronze-hourly
+    entrypoint: prefect_flow.py:bronze_ingestion_flow
+    work_pool:
+      name: github-analytics
+      work_queue_name: ingestion
+    schedule:
+      interval: 900
+    parameters:
+      hours_back: 6
