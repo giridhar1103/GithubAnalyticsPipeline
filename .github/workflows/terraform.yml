@@ -1,0 +1,36 @@
+name: terraform
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+  push:
+    branches: ["main"]
+    paths:
+      - "infra/**"
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: infra/envs/prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::<aws_account_id>:role/<github_actions_role_here>
+          aws-region: us-east-1
+      - name: Init
+        run: terraform init
+      - name: Format
+        run: terraform fmt -check -recursive
+      - name: Validate
+        run: terraform validate
+      - name: Plan
+        run: terraform plan
