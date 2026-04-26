@@ -56,7 +56,17 @@ The reason for this design is separation of responsibility. S3 stores the lake, 
 
 ## Architecture
 
+The main architecture diagram shows the full data path from GHArchive ingestion to the dashboard API and frontend.
 
+![GitHub Analytics Architecture](images/github_analytics_Architecture.png)
+
+The DevOps view shows how CI/CD, container builds, Terraform, monitoring, and runtime services fit around the data platform.
+
+![DevOps and Deployment Architecture](images/devops.png)
+
+The legend below explains the major service groups and connection styles used in the architecture diagrams.
+
+![Architecture Legend](images/legend.png)
 
 ## Data Lake Design
 
@@ -207,42 +217,9 @@ python scripts/build_dashboard_cache.py \
   --database-path /opt/github-analytics/data/dashboard.duckdb
 ```
 
-## Cost Notes
+## Cost Considerations
 
-This project can be tested cheaply if you are careful, but some AWS services can cost money if left running.
-
-### Usually Free Or Very Cheap
-
-- GHArchive data is public and free to download.
-- Local Python development is free.
-- DuckDB is free and runs locally.
-- FastAPI local development is free.
-- Terraform itself is free.
-- GitHub repository hosting is free for public repos.
-- Small Athena queries can be cheap if the data scanned is small.
-- S3 storage is cheap at small scale, especially for Parquet.
-
-### Services That Can Cost You
-
-- EC2 charges while the instance is running.
-- Application Load Balancer charges hourly and by usage.
-- Glue jobs charge based on worker time.
-- Athena charges by data scanned.
-- S3 charges for storage, requests, and data transfer.
-- CloudWatch can charge for logs, metrics, and retention.
-- NAT Gateway can become expensive if used in a private subnet setup.
-- Route 53 hosted zones and DNS queries can have small recurring costs.
-
-### How I Would Keep Costs Low
-
-- Use a small EC2 instance for the API.
-- Stop EC2 when not demoing.
-- Keep Glue worker counts low for small batches.
-- Store data as Parquet to reduce Athena scan size.
-- Add S3 lifecycle rules for raw files.
-- Keep CloudWatch log retention short.
-- Avoid NAT Gateway unless the VPC design really needs it.
-- Process a limited date range while testing.
+Most of the development work can be done locally with Python, DuckDB, FastAPI, Docker, and Terraform without paying for compute. Costs mainly start when AWS resources are created and left running. EC2 and the Application Load Balancer can create hourly charges, Glue jobs charge based on worker runtime, Athena charges by data scanned, and S3 charges for storage, requests, and transfer. CloudWatch logs and metrics can also add small recurring costs depending on retention and volume. To keep costs controlled, I would process a limited date range while testing, store data as Parquet, keep Glue workers small, use short log retention, apply S3 lifecycle rules, and stop compute resources when they are not needed.
 
 ## Documentation
 
@@ -252,6 +229,12 @@ This project can be tested cheaply if you are careful, but some AWS services can
 - [Metrics Catalog](docs/metrics_catalog.md)
 - [Operations Runbook](docs/operations.md)
 
-## Project Summary
+## Live Project
 
-The main goal of this project is to show how raw event data becomes a real analytics product. The pipeline starts with hourly public GitHub events, turns them into a structured lakehouse, builds metrics with distributed jobs, and serves the final numbers through a clean API that a dashboard can use directly.
+Check my full working project hosted on my website: [https://giriworks.com/github_analytics](https://giriworks.com/github_analytics)
+
+---
+
+Built and maintained by **Giridhar**  
+Portfolio: [giriworks.com](https://giriworks.com)  
+Project: GitHub Analytics Pipeline
